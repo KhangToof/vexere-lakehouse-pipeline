@@ -1,0 +1,4 @@
+selenium
+minio
+numpy
+pandas
