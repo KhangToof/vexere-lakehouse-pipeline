@@ -170,8 +170,8 @@ def facility_to_silver():
 
 def review_to_silver():
     spark = get_spark_session("review_to_silver")
-    json_path = 'file:///home/aduankan/Documents/Airflow/raw/sentiment/sentiment_vi_results_temp.json'
-    json_patha = 'file:///home/aduankan/Documents/Airflow/raw/sentiment/sentiment_en_results_temp.json'
+    json_path = 'file://{os.environ['SENTIMENT_PATH']}/sentiment_vi_results_temp.json'
+    json_patha = 'file://{os.environ['SENTIMENT_PATH']}/sentiment_en_results_temp.json'
 
     try:
         review_df_vi = spark.read.option("multiLine", True).json(json_path)

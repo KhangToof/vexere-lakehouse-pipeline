@@ -1,30 +1,39 @@
+import os
+import re
+import json
+import time
+import shutil
+import traceback
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from spark_session.spark_config import get_spark_session
+
+import pandas as pd
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
-from datetime import datetime, timedelta
-import pandas as pd
-import csv
-import json
-import traceback
-import os  # Added import for directory operations
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, monotonically_increasing_id
 
 def initialize_driver():
     """Initialize and configure Chrome WebDriver"""
     options = webdriver.ChromeOptions()
-    #options.add_argument("--start-maximized")
-    options.add_argument("--headless")
+    # options.add_argument("--start-maximized")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-extensions")
+    options.add_argument("--headless=new")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-browser-side-navigation")
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-notifications")
     options.add_argument("--disable-popup-blocking")
+    options.add_argument("--window-size=1920,1080")
     driver = webdriver.Chrome(options=options)
     return driver
 
@@ -58,7 +67,7 @@ def scroll_and_click_see_more(driver):
 
 def get_bus_names_and_buttons(driver):
     """Get all unique bus names and their detail buttons"""
-    wait = WebDriverWait(driver, 10)
+    wait = WebDriverWait(driver, 3)
     bus_data = []
     
     try:
@@ -93,14 +102,14 @@ def get_bus_names_and_buttons(driver):
         print(f"Error getting bus names: {e}")
         return []
 
-def extract_reviews_from_page(driver):
+def extract_reviews_from_page(driver, crawl_date):
     """Extract reviews from the current page, avoiding duplicates"""
     reviews = []
     processed_reviews = set()
 
     try:
         # Wait for review containers to be present
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 3).until(
             EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'review-item')]"))
         )
         
@@ -126,7 +135,7 @@ def extract_reviews_from_page(driver):
                 except:
                     pass
                 
-                # Extract comment - fixed selector to properly locate comments
+                # Extract comment
                 comment = "No comment"
                 try:
                     comment_elem = container.find_element(By.XPATH, ".//p[contains(@class, 'comment')]")
@@ -134,13 +143,20 @@ def extract_reviews_from_page(driver):
                 except NoSuchElementException:
                     pass
                 
-                # Extract date - fixed selector to properly locate dates
+                # Extract date
                 date = "Unknown Date"
                 try:
                     date_elem = container.find_element(By.XPATH, ".//p[contains(@class, 'rated-date')]")
-                    date = date_elem.text.strip()
+                    raw_date = date_elem.text.strip()
+                    match = re.search(r"(\d{2}/\d{2}/\d{4})", raw_date)
+                    if match:
+                        date = match.group(1)
                 except NoSuchElementException:
                     pass
+                
+                # Skip reviews that are not from the desired date
+                if date != crawl_date:
+                    continue
                 
                 # Create a unique key for the review
                 review_key = f"{customer_name}|{stars}|{comment}|{date}"
@@ -151,7 +167,7 @@ def extract_reviews_from_page(driver):
                         "customer_name": customer_name,
                         "stars": stars,
                         "comment": comment,
-                        "date": date
+                        "date": raw_date
                     })
                     processed_reviews.add(review_key)
                     print(f"Extracted review: {customer_name}, {stars} stars, comment: {comment[:30]}..., date: {date}")
@@ -171,13 +187,15 @@ def extract_reviews_for_bus(driver, bus_entry):
     """Extract reviews for a specific bus"""
     bus_name = bus_entry["name"]
     all_reviews = []
-    wait = WebDriverWait(driver, 10)
+    wait = WebDriverWait(driver, 5)
     page_number = 1
+    _date = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
     
     try:
         # Click on detail button for this bus
+        driver.execute_script("arguments[0].scrollIntoView(true);", bus_entry["button"])
+        time.sleep(0.5)  # nhỏ thôi, để scroll xong
         bus_entry["button"].click()
-        time.sleep(2)  # Wait longer for detail panel to load
         
         # Click review tab
         try:
@@ -224,7 +242,7 @@ def extract_reviews_for_bus(driver, bus_entry):
             time.sleep(1)
             
             # Extract reviews from current page
-            page_reviews = extract_reviews_from_page(driver)
+            page_reviews = extract_reviews_from_page(driver, crawl_date=_date)
             
             # Add bus name to each review
             for review in page_reviews:
@@ -325,6 +343,31 @@ def get_company_id(province, key, driver, date):
 
     return bus_list
 
+def process_company(province, key, company_id, _date):
+    """Hàm xử lý từng công ty ID trong một luồng riêng."""
+    driver = initialize_driver()
+    all_reviews = []
+    try:
+        print(f"\nProcessing company ID: {company_id} in province: {province}")
+        company_url = f"https://vexere.com/vi-VN/ve-xe-khach-tu-sai-gon-di-{province}-{key}.html?date={_date}&companies={company_id}&sort=time%3Aasc"
+        driver.get(company_url)
+        time.sleep(3)  # Wait longer for page to load completely
+
+        # Get all bus entries (name + button)
+        bus_entries = get_bus_names_and_buttons(driver)
+
+        # Process each bus
+        for bus_entry in bus_entries:
+            bus_reviews = extract_reviews_for_bus(driver, bus_entry)
+            all_reviews.extend(bus_reviews)
+
+    except Exception as e:
+        print(f"Error processing company {company_id}: {e}")
+        traceback.print_exc()
+    finally:
+        driver.quit()
+    return all_reviews
+
 def crwl_reviews():
     provinces_keys = {
         "can-tho": "129t1131",
@@ -342,109 +385,93 @@ def crwl_reviews():
         "ben-tre": "129t171",
     }
 
-    _date = (datetime.now() + timedelta(days=1)).strftime("%d-%m-%Y")
+    _date = (datetime.now() + timedelta(days=1)).strftime("%d/%m/%Y")
     all_reviews = []
-    driver = initialize_driver()
-    
+
+    # Load existing reviews from JSON
+    try:
+        with open("bus_reviews_temp.json", "r", encoding="utf-8") as json_file:
+            existing_reviews = json.load(json_file)
+    except FileNotFoundError:
+        existing_reviews = []
+
     # Track processed company IDs across all provinces
     processed_company_ids = set()
-    
-    try:
+
+    with ThreadPoolExecutor(max_workers=3) as executor:  # Limit threads to 3 for better performance
+        futures = []
         for province, key in provinces_keys.items():
             print(f"\n--- Processing province: {province} ---")
-            
+
             # Get company IDs for this province
+            driver = initialize_driver()
             _ids = get_company_id(province, key, driver, _date)
+            driver.quit()
+
             list_id = [i[1] for i in _ids]
             unique_ids = list(set(list_id))
-            
+
             for company_id in unique_ids:
-                # Skip if we've already processed this company ID
                 if company_id in processed_company_ids:
                     print(f"Skipping already processed company ID: {company_id}")
                     continue
-                
-                # Mark this company ID as processed
-                processed_company_ids.add(company_id)
-                
-                print(f"\nProcessing company ID: {company_id}")
-                company_url = f"https://vexere.com/vi-VN/ve-xe-khach-tu-sai-gon-di-{province}-{key}.html?date={_date}&companies={company_id}&sort=time%3Aasc"    
-                
-                try:
-                    driver.get(company_url)
-                    time.sleep(3)  # Wait longer for page to load completely
-                    
-                    # Get all bus entries (name + button)
-                    bus_entries = get_bus_names_and_buttons(driver)
-                    
-                    # Dictionary to track processed buttons to avoid reprocessing the exact same DOM element
-                    processed_buttons = {}
-                    
-                    # Set to track processed bus names within this company ID
-                    processed_bus_names = set()
-                    
-                    # Process each bus
-                    for index, bus_entry in enumerate(bus_entries):
-                        bus_name = bus_entry["name"]
-                        button_id = id(bus_entry["button"])  # Use the object ID as a unique identifier
-                        
-                        # Skip if we've already processed this exact button element
-                        if button_id in processed_buttons:
-                            print(f"  Skipping entry with duplicate button: {bus_name}")
-                            continue
-                        
-                        # Skip if we've already processed a bus with this name for the current company
-                        if bus_name in processed_bus_names:
-                            print(f"  Skipping duplicate bus name: {bus_name}")
-                            continue
-                        
-                        # Mark this bus name as processed
-                        processed_bus_names.add(bus_name)
-                        processed_buttons[button_id] = True
-                        
-                        # Extract reviews for this bus
-                        bus_reviews = extract_reviews_for_bus(driver, bus_entry)
-                        
-                        # Add to our collection
-                        all_reviews.extend(bus_reviews)
-                    
-                except Exception as e:
-                    print(f"Error processing company {company_id}: {e}")
-                    traceback.print_exc()
-    
-    except Exception as e:
-        print(f"Error during execution: {e}")
-        traceback.print_exc()
-    
-    finally:
-        driver.quit()
-    
-    # Create DataFrame and save data
-    if all_reviews:
-        # Create formatted reviews for output
-        formatted_reviews = []
-        for review in all_reviews:
-            formatted_reviews.append({
-                "Bus_Name": review["bus_name"],
-                "Customer_Name": review["customer_name"],
-                "Stars": review["stars"],
-                "Comment": review["comment"],
-                "Date": review["date"]
-            })
-        
-        # Create DataFrame for CSV
-        df = pd.DataFrame(formatted_reviews)
-        
-        # Create raw/review directory if it doesn't exist
-        os.makedirs('raw/review', exist_ok=True)
-        
-        # Save to JSON in raw/review directory
-        json_path = os.path.join('raw', 'review', 'bus_reviews.json')
-        with open(json_path, 'w', encoding='utf-8') as json_file:
-            json.dump(formatted_reviews, json_file, ensure_ascii=False, indent=4)
-        print(f"Data saved to {json_path}")
-    else:
-        print("\nNo reviews were collected.")
 
-if __name__ == "__main__":
-    crwl_reviews()
+                processed_company_ids.add(company_id)
+                # Submit task to thread pool
+                futures.append(executor.submit(process_company, province, key, company_id, _date))
+
+        # Collect results from all threads
+        for future in futures:
+            all_reviews.extend(future.result())
+
+    # Filter out duplicate reviews
+    new_reviews = [
+        review for review in all_reviews
+        if review not in existing_reviews
+    ]
+
+    formatted_reviews = []
+    for review in new_reviews:
+        formatted_reviews.append({
+            "Bus_Name": review.get("bus_name", "Unknown"),
+            "Customer_Name": review.get("customer_name", "Unknown"),
+            "Stars": review.get("stars", 0),
+            "Comment": review.get("comment", ""),
+            "Date": review.get("date", "Unknown")
+        })
+
+    # Save updated reviews to JSON
+    if formatted_reviews:
+        existing_reviews.extend(formatted_reviews)
+        json_path = os.path.expanduser('~/Documents/Airflow/raw/review/bus_reviews_temp.json')
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+        with open(json_path, "w", encoding="utf-8") as json_file:
+            json.dump(existing_reviews, json_file, ensure_ascii=False, indent=4)
+        print(f"\nData saved to bus_reviews_temp.json. Total new reviews: {len(formatted_reviews)}")
+    else:
+        print("\nNo new reviews were collected.")
+
+    spark = get_spark_session("Checking")
+
+    # --- append to old bus_faci json ---
+    data_a = spark.read.option("multiLine", True).json("file://{os.environ['BUS_REVIEW_PATH']}/bus_reviews.json")
+    data_b = spark.read.option("multiLine", True).json("file://{os.environ['BUS_REVIEW_PATH']}/bus_reviews_temp.json")
+    if data_b.count() > 0:
+        data_all = data_a.union(data_b)
+    else:
+        print("bus_facilities_temp.json is empty. Skipping append.")
+        data_all = data_a
+    data_all = data_all.coalesce(1)
+    output_dir = "file://{os.environ['BUS_REVIEW_PATH']}/bus_reviews"
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    data_all.write.json('file://{os.environ['BUS_REVIEW_PATH']}/bus_reviews')
+    
+    final_path = "file://{os.environ['BUS_REVIEW_PATH']}/bus_reviews.json"
+    for file in os.listdir(output_dir):
+        if file.startswith("part-") and file.endswith(".json"):
+            full_file_path = os.path.join(output_dir, file)
+            shutil.move(full_file_path, final_path)
+            break
+
+    spark.stop()

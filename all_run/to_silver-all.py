@@ -69,8 +69,6 @@ def add_bus_id(bus_ticket, bus_ids_company, join_column="Bus_Name"):
         on=join_column,
         how="left"
     )
-    
-    # Sắp xếp lại thứ tự cột
     columns_order = ["Bus_Key", "Bus_Id" , "Bus_Name"] + [col for col in bus_ticket_with_id.columns if col not in ["Bus_Key", "Bus_Id", "Bus_Name"]]
     bus_ticket_with_id = bus_ticket_with_id.select(*columns_order)
     
@@ -82,15 +80,13 @@ def add_bus_id_z(bus_facility, bus_ids_company, join_column="Bus_Name"):
         on=join_column,
         how="left"
     )
-    
-    # Sắp xếp lại thứ tự cột
     columns_order = ["Id", "Bus_Id" , "Bus_Name"] + [col for col in bus_facility_with_id.columns if col not in ["Id", "Bus_Id" , "Bus_Name"]]
     bus_facility_with_id = bus_facility_with_id.select(*columns_order)
     
     return bus_facility_with_id
 
 spark = SparkSession.builder \
-    .appName("test") \
+    .appName("a") \
     .master('local[*]') \
     .config("spark.driver.maxResultSize", "4g") \
     .config("spark.driver.memory", "2g") \
@@ -98,9 +94,9 @@ spark = SparkSession.builder \
     .config('spark.dynamicAllocation.minExecutors', '1') \
     .config('spark.dynamicAllocation.maxExecutors', '2') \
     .config('spark.dynamicAllocation.enabled', 'true') \
-    .config("spark.hadoop.fs.s3a.access.key", 'xdDPuIep2C9PzFaPQmJ7') \
-    .config("spark.hadoop.fs.s3a.secret.key", 'GMqTLyTksNX75JrYUA1g2FfpePDJbQpqLJY6b4y2') \
-    .config("spark.hadoop.fs.s3a.endpoint", "http://100.69.155.39:9000") \
+    .config("spark.hadoop.fs.s3a.access.key", os.environ.get('S3_ACCESS_KEY')) \
+    .config("spark.hadoop.fs.s3a.secret.key", os.environ.get('S3_SECRET_KEY')) \
+    .config("spark.hadoop.fs.s3a.endpoint", os.environ.get('S3_ENDPOINT')) \
     .config("spark.hadoop.fs.s3a.impl", 'org.apache.hadoop.fs.s3a.S3AFileSystem') \
     .config("spark.hadoop.fs.s3a.path.style.access", 'true') \
     .config("spark.jars.packages", "io.delta:delta-core_2.12:2.4.0," 
@@ -109,18 +105,17 @@ spark = SparkSession.builder \
     .config("spark.sql.extensions", 'io.delta.sql.DeltaSparkSessionExtension') \
     .config("spark.sql.catalog.spark_catalog", 'org.apache.spark.sql.delta.catalog.DeltaCatalog') \
     .getOrCreate()
+)
 
-start_date_str = "05-05-2025"
-end_date_str = "05-05-2025"
+start_date_str = ""
+end_date_str = ""
 
 start_date = datetime.strptime(start_date_str, "%d-%m-%Y")
 end_date = datetime.strptime(end_date_str, "%d-%m-%Y")
 
-# Biến để lặp qua từng ngày
 current_date = start_date
 print(f"Bắt đầu xử lý dữ liệu từ {start_date_str} đến {end_date_str}...")
 
-# Vòng lặp qua từng ngày trong khoảng thời gian
 while current_date <= end_date:
     _date = current_date.strftime("%d-%m-%Y")
     _month_year = current_date.strftime("%m-%Y")
@@ -129,17 +124,14 @@ while current_date <= end_date:
         # bus_ticket_new = spark.read.format("delta").load("s3a://bronze/ticket_all/")
         bus_ids_company = spark.read.format("delta").load("s3a://silver/bus_ids/")
         
-        # --- Start: Determine Max Existing ID ---
         target_delta_path = "s3a://silver/ticket/"
         max_existing_id = 0
         print(f"Attempting to read existing tickets from: {target_delta_path}") # Thêm log
         try:
             existing_tickets = spark.read.format("delta").load(target_delta_path)
             print(f"Successfully loaded DataFrame from {target_delta_path}. Checking if empty...") # Thêm log
-            # Sử dụng .rdd.isEmpty() có thể hiệu quả hơn cho một số trường hợp
             if not existing_tickets.rdd.isEmpty():
                 print("DataFrame is not empty. Calculating max(Bus_Key)...") # Thêm log
-                # In schema để kiểm tra cột Bus_Key
                 print("Schema of existing_tickets:")
                 existing_tickets.printSchema()
     
@@ -155,9 +147,9 @@ while current_date <= end_date:
         except Exception as e:
             print(f"CRITICAL ERROR reading or processing {target_delta_path}:") # Đánh dấu lỗi quan trọng
             print(f"Exception Type: {type(e).__name__}")
-            print(f"Exception Message: {str(e)}") # Chuyển e thành string để chắc chắn in được
+            print(f"Exception Message: {str(e)}")
             print("------ Full Traceback ------")
-            traceback.print_exc() # In đầy đủ stack trace để biết lỗi ở dòng nào
+            traceback.print_exc()
             print("---------------------------")
             print(f"Proceeding with max_existing_id = 1 due to error reading existing table.")
             max_existing_id = 0
@@ -199,15 +191,10 @@ while current_date <= end_date:
         bus_ticket_new = bus_ticket_new.withColumn("Bus_Key", col("Bus_Key").cast(IntegerType()))
         bus_ticket_final = add_bus_id(bus_ticket_new, bus_ids_company)
         bus_ticket_final.write.format("delta").mode("append").save(target_delta_path)
-
     except Exception as e:
-        # Xử lý lỗi nếu file không tồn tại hoặc có vấn đề khác khi đọc/ghi
-        # Phổ biến nhất là AnalysisException khi file không tìm thấy
         print(f"  LỖI khi xử lý ngày {_date_str}: {e}")
         print(f"  Bỏ qua ngày này và tiếp tục...")
-        # Bạn có thể thêm logic log lỗi chi tiết hơn ở đây nếu cần
 
-    # Chuyển sang ngày tiếp theo
     current_date += timedelta(days=1)
 
 print("\nHoàn tất quá trình xử lý dữ liệu theo ngày.")

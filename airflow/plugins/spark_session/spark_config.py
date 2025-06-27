@@ -1,4 +1,5 @@
 from pyspark.sql import SparkSession
+import os
 
 def get_spark_session(app_name):
     return (
@@ -6,16 +7,14 @@ def get_spark_session(app_name):
         .appName(app_name) \
         .master('local[*]') \
         .config("spark.driver.maxResultSize", "4g") \
-        .config("spark.submit.pyFiles", "/home/aduankan/Documents/Airflow/plugins/convert.zip,"
-					"/home/aduankan/Documents/Airflow/plugins/spark_session.zip") \
     	.config("spark.driver.memory", "2g") \
         .config("spark.executor.memory", "2g") \
         .config('spark.dynamicAllocation.minExecutors', '1') \
         .config('spark.dynamicAllocation.maxExecutors', '2') \
         .config('spark.dynamicAllocation.enabled', 'true') \
-        .config("spark.hadoop.fs.s3a.access.key", 'xdDPuIep2C9PzFaPQmJ7') \
-        .config("spark.hadoop.fs.s3a.secret.key", 'GMqTLyTksNX75JrYUA1g2FfpePDJbQpqLJY6b4y2') \
-        .config("spark.hadoop.fs.s3a.endpoint", "http://100.69.155.39:9000") \
+        .config("spark.hadoop.fs.s3a.access.key", os.environ.get('S3_ACCESS_KEY')) \
+        .config("spark.hadoop.fs.s3a.secret.key", os.environ.get('S3_SECRET_KEY')) \
+        .config("spark.hadoop.fs.s3a.endpoint", os.environ.get('S3_ENDPOINT')) \
         .config("spark.hadoop.fs.s3a.impl", 'org.apache.hadoop.fs.s3a.S3AFileSystem') \
         .config("spark.hadoop.fs.s3a.path.style.access", 'true') \
         .config("spark.jars.packages", "io.delta:delta-core_2.12:2.4.0," 

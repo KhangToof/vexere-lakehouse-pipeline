@@ -5,16 +5,13 @@ import os
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from langdetect import detect, DetectorFactory
 
-# Set seed for reproducibility
 DetectorFactory.seed = 0
-
 
 def detect_language(comment):
     try:
         return detect(comment)
     except:
         return None
-
 
 def merge_json_files(raw_path, temp_path):
     with open(raw_path, 'r', encoding='utf-8') as f:
@@ -35,12 +32,11 @@ def merge_json_files(raw_path, temp_path):
 
     print(f"Đã gộp thành công: {os.path.basename(raw_path)}")
 
-
 def process_sentiment_analysis_vi():
-    json_path = os.path.expanduser('~/Documents/Airflow/raw/review/bus_reviews_temp.json')
-    model_path = '5CD-AI/Vietnamese-Sentiment-visobert'
-    output_json_temp = os.path.expanduser('~/Documents/Airflow/raw/sentiment/sentiment_vi_results_temp.json')
-    output_json = os.path.expanduser('~/Documents/Airflow/raw/sentiment/sentiment_vi_results.json')
+    json_path = os.environ.get("REVIEW_JSON")
+    model_path = os.environ.get("MODEL_VI")
+    output_json_temp = os.environ.get("SENTIMENT_VI_TEMP")
+    output_json = os.environ.get("SENTIMENT_VI_OUTPUT")
 
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -90,12 +86,11 @@ def process_sentiment_analysis_vi():
     pd.DataFrame(results).to_json(output_json_temp, orient="records", force_ascii=False)
     merge_json_files(output_json, output_json_temp)
 
-
 def process_sentiment_analysis_en():
-    json_path = os.path.expanduser('~/Documents/Airflow/raw/review/bus_reviews_temp.json')
-    model_path = 'distilbert-base-uncased-finetuned-sst-2-english'
-    output_json_temp = os.path.expanduser('~/Documents/Airflow/raw/sentiment/sentiment_en_results_temp.json')
-    output_json = os.path.expanduser('~/Documents/Airflow/raw/sentiment/sentiment_en_results.json')
+    json_path = os.environ.get("REVIEW_JSON")
+    model_path = os.environ.get("MODEL_EN")
+    output_json_temp = os.environ.get("SENTIMENT_EN_TEMP")
+    output_json = os.environ.get("SENTIMENT_EN_OUTPUT")
 
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)

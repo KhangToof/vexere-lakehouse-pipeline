@@ -314,8 +314,9 @@ def crwl_facility():
     df.to_json(json_path, orient='records', force_ascii=False)
 
     # --- append to old bus_faci json ---
-    data_a = spark.read.json("file:///home/aduankan/Documents/Airflow/raw/facility/bus_facilities.json")
-    data_b = spark.read.json("file:///home/aduankan/Documents/Airflow/raw/facility/bus_facilities_temp.json")
+    data_a = spark.read.json(f"file://{os.environ['BUS_FACILITY_PATH']}/bus_facilities.json")
+    data_b = spark.read.json(f"file://{os.environ['BUS_FACILITY_PATH']}/bus_facilities_temp.json")
+
     if data_b.count() > 0:
         max_id = data_a.agg({"Id": "max"}).collect()[0][0] or 0
         data_b_indexed = data_b.withColumn("new_id", monotonically_increasing_id())
@@ -331,12 +332,13 @@ def crwl_facility():
         data_all = data_a
     
     data_all = data_all.coalesce(1)
-    output_dir = "/home/aduankan/Documents/Airflow/raw/facility/bus_facilities"
+    output_dir = os.path.join(os.environ["BUS_FACILITY_PATH"], "bus_facilities")
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
-    data_all.write.json('file:///home/aduankan/Documents/Airflow/raw/facility/bus_facilities')
+    data_all.write.json("file://{os.environ['BUS_FACILITY_PATH']}/bus_facilities")
     
-    final_path = "/home/aduankan/Documents/Airflow/raw/facility/bus_facilities.json"
+    final_path = os.path.join(os.environ["BUS_FACILITY_PATH"], "bus_facilities.json")
+
     for file in os.listdir(output_dir):
         if file.startswith("part-") and file.endswith(".json"):
             full_file_path = os.path.join(output_dir, file)
