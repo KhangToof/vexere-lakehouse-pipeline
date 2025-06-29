@@ -25,4 +25,17 @@
 - Finally visualized via Metabase.
 
 ## 4. 🏛️ Warehouse Model Design
+![image](https://github.com/user-attachments/assets/26f8e129-be5d-445d-b0b8-aabd13935360)
+- The data warehouse model is designed based on galaxy schema, with 2 fact tables and 5 dim tables.
+- The 2 main Fact tables are about: attributes, measures related to bus tickets and attributes, measures related to customer comments.
+
+## 5. 🖼️ Visualization
+The problem analyzed here is related to improving the quality of bus ticket booking services, the target users here are bus companies. The main target of analysis is the bus companies and the customers using the service. From these issues, the following questions are raised:
+- Statistics on the number of tickets sold daily, along with the average ticket price of each trip running on each route.
+- Analysis of ticket booking trends by vehicle type and price.
+- Analysis of customer satisfaction when using the service.
+![image](https://github.com/user-attachments/assets/5566d4b7-02e6-4f50-acfd-8bbeb0dc66a2)
+![image](https://github.com/user-attachments/assets/ce16d849-fdc8-4360-b87e-acb3e30324f9)
+![image](https://github.com/user-attachments/assets/6b3b18f8-8961-4fda-a25b-db4234437bcc)
+
 
