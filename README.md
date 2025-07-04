@@ -15,7 +15,11 @@
 - Sample data about ride facility: ![image](https://github.com/user-attachments/assets/76e1a1cb-df34-4597-920c-74b652e7cbc4)
 - Sample data on customer comments: ![image](https://github.com/user-attachments/assets/43902afe-a166-4fa7-84c7-493b1ea5b72a)
 
-## 3. 💡 System Design
+## 3. 📭 Compare Systems
+![image](https://github.com/user-attachments/assets/8d61e611-da15-4261-b58b-8c582550e7c9)
+
+
+## 4. 💡 System Design
 ![image](https://github.com/user-attachments/assets/973d86f1-8ece-4cae-b656-00883947f25c)
 - The system is designed through 4 main items:
 - First is the source data scraped from the website, then diversify the input data by deploying to save into 2 file formats: CSV and JSON
@@ -24,12 +28,12 @@
 - Next, the model will apply NLP (natural language processing) to evaluate and analyze comment sentiment. Along with using Presto as a high performance query engine to MinIO via Hive Metastore.
 - Finally visualized via Metabase.
 
-## 4. 🏛️ Warehouse Model Design
+## 5. 🏛️ Warehouse Model Design
 ![image](https://github.com/user-attachments/assets/26f8e129-be5d-445d-b0b8-aabd13935360)
 - The data warehouse model is designed based on galaxy schema, with 2 fact tables and 5 dim tables.
 - The 2 main Fact tables are about: attributes, measures related to bus tickets and attributes, measures related to customer comments.
 
-## 5. 🖼️ Visualization
+## 6. 🖼️ Visualization
 The problem analyzed here is related to improving the quality of bus ticket booking services, the target users here are bus companies. The main target of analysis is the bus companies and the customers using the service. From these issues, the following questions are raised:
 - Statistics on the number of tickets sold daily, along with the average ticket price of each trip running on each route.
 - Analysis of ticket booking trends by vehicle type and price.
