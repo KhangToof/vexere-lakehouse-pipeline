@@ -11,16 +11,29 @@
 - Collected through [vexere.com](https://vexere.com/) website.
 - There are 3 main data sets collected: bus tickets, bus trip utilities, customer reviews with comments.
 - Divided into 2 main data sets: CSV for bus tickets, JSON for utilities and comments.
-- Sample ticket data: ![image](https://github.com/user-attachments/assets/e15d7176-66a4-470d-9580-09287b1c5351) ![image](https://github.com/user-attachments/assets/cafed35a-73a4-4427-a0b2-564415fb6a64)
-- Sample data about ride facility: ![image](https://github.com/user-attachments/assets/76e1a1cb-df34-4597-920c-74b652e7cbc4)
-- Sample data on customer comments: ![image](https://github.com/user-attachments/assets/43902afe-a166-4fa7-84c7-493b1ea5b72a)
+- Sample ticket data:
+
+  ![image](https://github.com/user-attachments/assets/e15d7176-66a4-470d-9580-09287b1c5351) ![image](https://github.com/user-attachments/assets/cafed35a-73a4-4427-a0b2-564415fb6a64)
+
+  
+- Sample data about ride facility:
+
+  ![image](https://github.com/user-attachments/assets/76e1a1cb-df34-4597-920c-74b652e7cbc4)
+
+  
+- Sample data on customer comments:
+
+  ![image](https://github.com/user-attachments/assets/43902afe-a166-4fa7-84c7-493b1ea5b72a)
 
 ## 3. 📭 Compare Systems
+
 ![image](https://github.com/user-attachments/assets/8d61e611-da15-4261-b58b-8c582550e7c9)
 
 
 ## 4. 💡 System Design
+
 ![image](https://github.com/user-attachments/assets/973d86f1-8ece-4cae-b656-00883947f25c)
+
 - The system is designed through 4 main items:
 - First is the source data scraped from the website, then diversify the input data by deploying to save into 2 file formats: CSV and JSON
 - Next is the storage layer that will use MinIO to store 3 data layers along with storing raw data on Ubuntu Server.
@@ -29,7 +42,9 @@
 - Finally visualized via Metabase.
 
 ## 5. 🏛️ Warehouse Model Design
+
 ![image](https://github.com/user-attachments/assets/26f8e129-be5d-445d-b0b8-aabd13935360)
+
 - The data warehouse model is designed based on galaxy schema, with 2 fact tables and 5 dim tables.
 - The 2 main Fact tables are about: attributes, measures related to bus tickets and attributes, measures related to customer comments.
 
@@ -38,8 +53,11 @@ The problem analyzed here is related to improving the quality of bus ticket book
 - Statistics on the number of tickets sold daily, along with the average ticket price of each trip running on each route.
 - Analysis of ticket booking trends by vehicle type and price.
 - Analysis of customer satisfaction when using the service.
+
 ![image](https://github.com/user-attachments/assets/5566d4b7-02e6-4f50-acfd-8bbeb0dc66a2)
+
 ![image](https://github.com/user-attachments/assets/ce16d849-fdc8-4360-b87e-acb3e30324f9)
+
 ![image](https://github.com/user-attachments/assets/6b3b18f8-8961-4fda-a25b-db4234437bcc)
 
 
